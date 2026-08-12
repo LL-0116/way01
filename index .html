@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NDCS Smart Wayfinding System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --primary: #0284c7;
+            --halo-color: #00f0ff;
+            --success-color: #10b981;
+        }
+
+        html { font-size: 16px; transition: font-size 0.3s ease; }
+        html.senior-mode { font-size: 20px; }
+
+        body {
+            background-color: #f1f5f9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .badge-frame {
+            position: relative;
+            width: 390px;
+            height: 780px;
+            background: #ffffff;
+            border: 12px solid #1e293b;
+            border-radius: 46px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .global-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 1rem;
+            z-index: 50;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+            pointer-events: none;
+        }
+        
+        .global-header button { pointer-events: auto; }
+
+        .view-toggle-control {
+            position: absolute;
+            top: 4.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 99px;
+            padding: 0.25rem;
+            display: flex;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            z-index: 40;
+            pointer-events: auto;
+        }
+
+        .toggle-btn {
+            padding: 0.4rem 1rem;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #475569;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .toggle-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+        }
+
+        .view-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            transition: opacity 0.3s ease;
+        }
+
+        .hidden-view {
+            opacity: 0;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* ================= AR 视图与高科技识别框 ================= */
+        #webcam-container {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #webcam-container canvas {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important; 
+        }
+
+        .ar-scanner-box {
+            position: absolute;
+            top: 45%;
+            left: 50%;
+            width: 280px;
+            height: 200px;
+            transform: translate(-50%, -50%) scale(1.15);
+            opacity: 0; 
+            z-index: 15;
+            pointer-events: none;
+            transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .ar-scanner-box.locked {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            width: 180px;
+            height: 120px;
+        }
+
+        .corner {
+            position: absolute;
+            width: 35px;
+            height: 35px;
+            border-color: var(--success-color);
+            border-style: solid;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+        }
+        
+        .corner-tl { top: 0; left: 0; border-width: 4px 0 0 4px; border-radius: 12px 0 0 0; }
+        .corner-tr { top: 0; right: 0; border-width: 4px 4px 0 0; border-radius: 0 12px 0 0; }
+        .corner-bl { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-radius: 0 0 0 12px; }
+        .corner-br { bottom: 0; right: 0; border-width: 0 4px 4px 0; border-radius: 0 0 12px 0; }
+
+        .ar-halo {
+            position: absolute;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 220px;
+            height: 160px;
+            border: 2px solid var(--success-color);
+            border-radius: 16px;
+            box-shadow: 0 0 25px rgba(16, 185, 129, 0.4), inset 0 0 15px rgba(16, 185, 129, 0.2);
+            animation: breathe 1.5s infinite alternate;
+            display: none;
+            z-index: 14;
+            pointer-events: none;
+        }
+        @keyframes breathe {
+            0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.5; }
+            100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+        }
+
+        .ar-arrow-container {
+            position: absolute;
+            top: 25%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70px;
+            height: 70px;
+            z-index: 15;
+            pointer-events: none;
+            animation: float 1s infinite alternate;
+        }
+        @keyframes float {
+            0% { transform: translateX(-50%) translateY(0); }
+            100% { transform: translateX(-50%) translateY(-10px); }
+        }
+
+        .ar-arrow {
+            width: 100%;
+            height: 100%;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: center;
+        }
+        
+        .arrow-up-blue { fill: #0284c7; filter: drop-shadow(0 4px 10px rgba(2, 132, 199, 0.8)); transform: rotate(-90deg); }
+        .arrow-right-green { fill: #10b981; filter: drop-shadow(0 4px 10px rgba(16, 185, 129, 0.8)); transform: rotate(0deg); }
+        .arrow-up-green { fill: #10b981; filter: drop-shadow(0 4px 10px rgba(16, 185, 129, 0.8)); transform: rotate(-90deg); }
+        .arrow-left-green { fill: #10b981; filter: drop-shadow(0 4px 10px rgba(16, 185, 129, 0.8)); transform: scaleX(-1); }
+
+        /* ================= 2D 导航专用样式 ================= */
+        #view-map { background-color: #f1f5f9; z-index: 20; }
+        
+        .map-bg {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(#e2e8f0 1px, transparent 1px),
+                linear-gradient(90deg, #e2e8f0 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0.5;
+        }
+
+        .marching-ants { stroke-dasharray: 8; animation: march 1s linear infinite; }
+        @keyframes march { to { stroke-dashoffset: -16; } }
+
+        .radar-ping {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: rgba(2, 132, 199, 0.3);
+            border-radius: 50%;
+            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+            z-index: 21;
+        }
+        @keyframes ping { 75%, 100% { transform: scale(2); opacity: 0; } }
+
+        .modal-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 60;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #loading-screen {
+            position: absolute;
+            inset: 0;
+            background: #0284c7;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            transition: opacity 0.5s ease;
+        }
+    </style>
+</head>
+<body>
+
+<div class="badge-frame">
+    
+    <!-- 优化版：等待摄像头授权界面的全英文文案 -->
+    <div id="loading-screen">
+        <div class="text-4xl font-bold mb-2">D</div>
+        <div class="text-sm font-semibold tracking-wider">NDCS Smart Wayfinding</div>
+        <div class="mt-4 w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+        <div class="text-xs mt-4 opacity-90 text-center px-4 leading-relaxed">
+            Requesting camera access...<br>
+            <span class="text-[0.65rem] text-sky-200">Please allow camera permissions for AR Navigation</span>
+        </div>
+    </div>
+
+    <!-- 全局悬浮 UI -->
+    <div class="global-header">
+        <div class="flex flex-col gap-2">
+            <span class="bg-black/40 backdrop-blur text-white px-2.5 py-1 rounded-md text-[0.65rem] border border-white/20">
+                Task: Proceed to Clinic 401
+            </span>
+            <span id="ai-status-container" class="bg-black/40 backdrop-blur text-white px-2.5 py-1 rounded-md text-[0.65rem] border border-white/20 flex items-center gap-1.5 w-fit transition-all duration-300">
+                <span id="ai-status-dot" class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
+                <span id="ai-status-text">Requesting access...</span>
+            </span>
+        </div>
+        <div class="flex flex-col gap-2 items-end">
+            <button onclick="toggleSeniorMode()" class="px-2.5 py-1.5 bg-white/90 backdrop-blur rounded-lg text-[0.65rem] font-bold text-slate-700 shadow-sm active:scale-95">
+                A Senior Mode
+            </button>
+            <button onclick="showModal('Green Vest volunteers have received your request and are heading to your location.')" class="px-2.5 py-1.5 bg-emerald-500 rounded-lg text-[0.65rem] font-bold text-white shadow-md flex items-center gap-1 active:scale-95">
+                <span>👤</span> Call Help
+            </button>
+        </div>
+    </div>
+
+    <!-- 导航模式切换控件 -->
+    <div class="view-toggle-control">
+        <button id="tab-ar" onclick="switchView('ar')" class="toggle-btn active">📸 AR Live</button>
+        <button id="tab-map" onclick="switchView('map')" class="toggle-btn">🗺️ 2D Map</button>
+    </div>
+
+    <!-- ==================== 1. AR 实景导航页 ==================== -->
+    <div id="view-ar" class="view-layer">
+        <div id="webcam-container"></div>
+        
+        <!-- 动态高科技识别框 -->
+        <div id="ar-scanner" class="ar-scanner-box">
+            <div class="corner corner-tl"></div>
+            <div class="corner corner-tr"></div>
+            <div class="corner corner-bl"></div>
+            <div class="corner corner-br"></div>
+        </div>
+        <!-- 呼吸光圈配合使用 -->
+        <div id="ar-halo" class="ar-halo"></div>
+        
+        <!-- 常驻 3D 箭头 -->
+        <div id="ar-arrow-container" class="ar-arrow-container" style="display: none;">
+            <svg id="ar-arrow" class="ar-arrow arrow-up-blue" viewBox="0 0 100 100">
+                <polygon points="20,40 60,40 60,20 100,50 60,80 60,60 20,60" />
+            </svg>
+        </div>
+
+        <!-- 底部浮动交互面板 -->
+        <div class="mt-auto bg-white/95 backdrop-blur-md rounded-t-3xl p-5 shadow-[0_-10px_40px_rgba(0,0,0,0.15)] z-20 pointer-events-auto transition-all duration-300">
+            <div class="flex items-start gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-100 shadow-inner m-0">
+                <span class="text-2xl mt-1">🤖</span>
+                <div>
+                    <h4 class="text-[0.65rem] text-[#0284c7] font-bold mb-1 uppercase tracking-wider">Live Voice Guide</h4>
+                    <p id="ar-voice-text" class="text-[0.8rem] text-slate-700 font-bold leading-snug transition-opacity duration-300">
+                        "Waiting for camera authorization. Please allow permissions to begin..."
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 2. 2D 导航平面图页 ==================== -->
+    <div id="view-map" class="view-layer hidden-view">
+        <div class="map-bg"></div>
+
+        <div class="absolute top-[8.5rem] right-4 flex flex-col gap-2 z-40 pointer-events-auto">
+            <button class="w-10 h-10 bg-white/90 backdrop-blur rounded-full shadow-lg border border-slate-200 flex items-center justify-center text-slate-600 active:scale-95 cursor-pointer">🧭</button>
+            <button class="w-10 h-10 bg-white/90 backdrop-blur rounded-full shadow-lg border border-slate-200 flex items-center justify-center text-slate-600 active:scale-95 cursor-pointer">🎯</button>
+        </div>
+
+        <div class="flex-1 relative w-full h-full mt-10">
+            <svg class="absolute inset-0 w-full h-full pointer-events-none z-10" width="390" height="780">
+                <path d="M 195 460 L 195 300 Q 195 270 225 270 L 270 270 Q 300 270 300 240 L 300 120" fill="none" stroke="rgba(2, 132, 199, 0.2)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M 195 460 L 195 300 Q 195 270 225 270 L 270 270 Q 300 270 300 240 L 300 120" fill="none" stroke="#0284c7" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" class="marching-ants"/>
+            </svg>
+
+            <div class="absolute top-[440px] left-[125px] w-[140px] h-[60px] bg-white border-2 border-slate-300 rounded-2xl shadow-sm flex items-center justify-center z-20">
+                <span class="text-xl mr-2">🛗</span>
+                <span class="text-[0.75rem] font-bold text-slate-600">L4 Lift Lobby</span>
+            </div>
+            <div class="absolute top-[250px] left-[30px] w-[120px] h-[60px] bg-white border-2 border-slate-300 rounded-2xl shadow-sm flex items-center justify-center z-20">
+                <span class="text-xl mr-1">🖥️</span>
+                <span class="text-[0.75rem] font-bold text-slate-600">Kiosks</span>
+            </div>
+            <div class="absolute top-[260px] right-[20px] w-[100px] h-[60px] bg-white border-2 border-slate-300 rounded-2xl shadow-sm flex items-center justify-center z-20">
+                <span class="text-xl mr-1">👩‍⚕️</span>
+                <span class="text-[0.75rem] font-bold text-slate-600">Reception</span>
+            </div>
+            <div class="absolute top-[60px] right-[30px] w-[120px] h-[80px] bg-emerald-50 border-2 border-emerald-400 rounded-2xl shadow-lg flex flex-col items-center justify-center z-20">
+                <span class="text-[0.9rem] font-black text-emerald-700">Clinic 401</span>
+                <span class="text-[0.55rem] font-bold text-emerald-600 mt-1 bg-emerald-100 px-2 py-0.5 rounded-md">📍 Destination</span>
+            </div>
+
+            <div class="absolute top-[360px] left-[195px] transform -translate-x-1/2 -translate-y-1/2 z-30 transition-all duration-1000 ease-in-out flex items-center justify-center w-[40px] h-[40px]" id="radar-marker">
+                <div class="radar-ping"></div>
+                <div class="w-5 h-5 bg-white rounded-full shadow-md flex items-center justify-center border-2 border-[#0284c7] relative z-10">
+                    <div class="w-2.5 h-2.5 bg-[#0284c7] rounded-full"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="absolute bottom-6 left-4 right-4 bg-white/95 backdrop-blur rounded-2xl shadow-xl p-4 z-30 border border-slate-100 pointer-events-auto">
+            <div class="flex items-center gap-4">
+                <div id="map-icon" class="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-[#0284c7] text-xl font-black transform -rotate-90 transition-transform duration-500">
+                    ➔
+                </div>
+                <div class="flex-1">
+                    <div id="map-text" class="text-[0.9rem] font-black text-slate-800 transition-opacity duration-300">Go straight, look for Kiosk</div>
+                    <div class="flex items-center gap-2 mt-1">
+                        <div class="w-full bg-slate-100 rounded-full h-1.5">
+                            <div id="map-progress" class="bg-[#0284c7] h-1.5 rounded-full transition-all duration-1000" style="width: 30%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div id="system-modal" class="modal-overlay">
+    <div class="bg-white p-6 rounded-3xl w-[80%] max-w-[300px] text-center shadow-2xl transform transition-transform scale-95 pointer-events-auto">
+        <div class="text-3xl mb-3">🔔</div>
+        <h3 id="modal-text" class="text-[0.8rem] font-bold text-slate-800 mb-5 leading-relaxed">Notification</h3>
+        <button onclick="closeModal()" class="w-full py-3 bg-[#0284c7] text-white font-bold rounded-xl text-[0.85rem] active:scale-95 transition cursor-pointer">Got it</button>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+<script>
+    const TM_URL_1 = "https://teachablemachine.withgoogle.com/models/zd6bWk8XV/"; 
+    const TM_URL_2 = "https://teachablemachine.withgoogle.com/models/Al5vlbOWk/"; 
+    
+    let isSenior = false;
+    let model1, model2;
+    let webcam;
+    let isAiRunning = false;
+    
+    let navStage = 1; 
+    let isTransitioning = false; 
+    
+    let aiWarmup = true; 
+    let consecutiveDetections = 0; 
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        document.getElementById('view-map').classList.add('hidden-view');
+        document.getElementById('view-ar').classList.remove('hidden-view');
+        
+        await initCameraAndAI();
+        setTimeout(() => {
+            const loader = document.getElementById('loading-screen');
+            loader.style.opacity = '0';
+            setTimeout(() => loader.style.display = 'none', 500);
+        }, 1500);
+    });
+
+    function switchView(viewName) {
+        document.getElementById('tab-ar').classList.remove('active');
+        document.getElementById('tab-map').classList.remove('active');
+        document.getElementById('tab-' + viewName).classList.add('active');
+
+        const viewAr = document.getElementById('view-ar');
+        const viewMap = document.getElementById('view-map');
+
+        if (viewName === 'ar') {
+            viewMap.classList.add('hidden-view');
+            viewAr.classList.remove('hidden-view');
+        } else if (viewName === 'map') {
+            viewAr.classList.add('hidden-view');
+            viewMap.classList.remove('hidden-view');
+        }
+    }
+
+    function toggleSeniorMode() {
+        isSenior = !isSenior;
+        const html = document.documentElement;
+        if (isSenior) {
+            html.classList.add('senior-mode');
+            showModal('Senior Mode enabled. The layout has been enlarged for easier reading.');
+        } else {
+            html.classList.remove('senior-mode');
+        }
+    }
+
+    function showModal(text) {
+        document.getElementById('modal-text').innerText = text;
+        document.getElementById('system-modal').style.display = 'flex';
+    }
+    function closeModal() {
+        document.getElementById('system-modal').style.display = 'none';
+    }
+
+    async function initCameraAndAI() {
+        try {
+            webcam = new tmImage.Webcam(390, 780, true);
+            await webcam.setup({ facingMode: "environment" });
+            await webcam.play();
+            
+            const container = document.getElementById("webcam-container");
+            container.innerHTML = "";
+            container.appendChild(webcam.canvas);
+            
+            document.getElementById('ar-arrow-container').style.display = 'block';
+            document.getElementById('ai-status-text').innerText = "Loading AI Engine...";
+
+            model1 = await tmImage.load(TM_URL_1 + "model.json", TM_URL_1 + "metadata.json");
+            model2 = await tmImage.load(TM_URL_2 + "model.json", TM_URL_2 + "metadata.json");
+
+            aiWarmup = true;
+            isAiRunning = true;
+            window.requestAnimationFrame(loopPrediction);
+            
+            setTimeout(() => {
+                aiWarmup = false;
+                document.getElementById('ai-status-text').innerText = "Stage 1/2: Head to Kiosk";
+            }, 2000);
+
+        } catch (error) {
+            document.getElementById('ai-status-text').innerText = "Camera Access Denied";
+            document.getElementById('ai-status-dot').classList.replace('bg-emerald-400', 'bg-red-500');
+            document.getElementById('ar-voice-text').innerHTML = "Camera permission is blocked. Please refresh the page and allow camera access to continue.";
+        }
+    }
+
+    async function loopPrediction() {
+        if (!isAiRunning) return;
+        webcam.update();
+
+        if (aiWarmup || isTransitioning) {
+            if (aiWarmup) updateARVisuals(false);
+            window.requestAnimationFrame(loopPrediction);
+            return;
+        }
+
+        if (webcam.canvas) {
+            try {
+                const currentModel = navStage === 1 ? model1 : model2;
+                const prediction = await currentModel.predict(webcam.canvas);
+                let detectedThisFrame = false;
+                
+                const targetPrediction = prediction[0];
+                if (targetPrediction && targetPrediction.probability > 0.85) {
+                    detectedThisFrame = true;
+                }
+
+                if (detectedThisFrame) {
+                    consecutiveDetections++;
+                } else {
+                    consecutiveDetections = 0;
+                }
+
+                updateARVisuals(consecutiveDetections >= 5);
+            } catch (e) {}
+        }
+        
+        window.requestAnimationFrame(loopPrediction);
+    }
+
+    function updateARVisuals(isDetected) {
+        if (isTransitioning) return; 
+
+        const scanner = document.getElementById('ar-scanner');
+        const halo = document.getElementById('ar-halo');
+        const arrow = document.getElementById('ar-arrow');
+        const voiceText = document.getElementById('ar-voice-text');
+        const statusText = document.getElementById('ai-status-text');
+        const statusContainer = document.getElementById('ai-status-container');
+
+        if (!isDetected) {
+            scanner.classList.remove('locked');
+            halo.style.display = 'none';
+            arrow.className.baseVal = "ar-arrow arrow-up-blue"; 
+            
+            if (navStage === 1) {
+                statusText.innerText = "Stage 1/2: Head to Kiosk";
+                voiceText.innerHTML = "Please <strong class='text-[#0284c7]'>hold your phone upright and continue straight</strong>. The system will automatically locate the Kiosk.";
+            } else {
+                statusText.innerText = "Stage 2/2: Locate Reception";
+                voiceText.innerHTML = "Please <strong class='text-[#0284c7]'>hold your phone upright and continue straight</strong> to find the Reception ahead.";
+            }
+        } else {
+            scanner.classList.add('locked');
+            halo.style.display = 'block';
+            
+            if (navStage === 1) {
+                statusText.innerText = "🎯 Kiosk Locked";
+                statusContainer.classList.add('bg-emerald-500/80', 'border-emerald-400');
+                arrow.className.baseVal = "ar-arrow arrow-right-green"; 
+                voiceText.innerHTML = "Kiosk identified! Please follow the <strong class='text-emerald-500'>green arrow and turn right</strong> towards the Reception.";
+                
+                isTransitioning = true;
+                setTimeout(() => {
+                    advanceToStage2();
+                    isTransitioning = false;
+                }, 4000);
+
+            } else {
+                statusText.innerText = "🎯 Reception Locked";
+                arrow.className.baseVal = "ar-arrow arrow-left-green"; 
+                voiceText.innerHTML = "Reception identified! Please follow the <strong class='text-emerald-500'>green arrow and turn left</strong> towards Clinic 401.";
+                
+                const radar = document.getElementById('radar-marker');
+                radar.style.top = '230px';
+                radar.style.left = '300px'; 
+                
+                const mapIcon = document.getElementById('map-icon');
+                mapIcon.style.transform = 'scaleX(-1)';
+                mapIcon.className = 'w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-500 text-xl font-black transition-transform duration-500';
+                document.getElementById('map-text').innerHTML = 'At the Reception, <strong class="text-emerald-500">turn left</strong> to Clinic 401';
+                
+                const mapProgress = document.getElementById('map-progress');
+                mapProgress.style.width = '100%';
+                mapProgress.classList.replace('bg-[#0284c7]', 'bg-emerald-500');
+            }
+        }
+    }
+
+    function advanceToStage2() {
+        navStage = 2;
+        consecutiveDetections = 0; 
+        
+        const statusContainer = document.getElementById('ai-status-container');
+        statusContainer.classList.remove('bg-emerald-500/80', 'border-emerald-400');
+        document.getElementById('ai-status-text').innerText = "Stage 2/2: Locate Reception";
+        
+        const radar = document.getElementById('radar-marker');
+        radar.style.top = '270px';
+        radar.style.left = '230px'; 
+        
+        const mapIcon = document.getElementById('map-icon');
+        mapIcon.style.transform = 'rotate(0deg)';
+        mapIcon.className = 'w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-[#0284c7] text-xl font-black transition-transform duration-500';
+        document.getElementById('map-text').innerHTML = 'At the Kiosk, <strong class="text-[#0284c7]">turn right</strong> towards the Reception';
+        document.getElementById('map-progress').style.width = '60%';
+    }
+</script>
+
+</body>
+</html>
