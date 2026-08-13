@@ -118,8 +118,11 @@
             width: 100% !important;
             height: 100% !important;
             object-fit: cover !important; 
+            /* 强制正常显示，防止手机浏览器自动镜像翻转 */
+            transform: scaleX(1) !important; 
         }
 
+        /* 动态 AI 识别框 (默认完全隐藏) */
         .ar-scanner-box {
             position: absolute;
             top: 45%;
@@ -174,6 +177,7 @@
             100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
         }
 
+        /* 悬浮 3D 箭头容器 */
         .ar-arrow-container {
             position: absolute;
             top: 25%;
@@ -258,18 +262,13 @@
 
 <div class="badge-frame">
     
-    <!-- 优化版：等待摄像头授权界面的全英文文案 -->
     <div id="loading-screen">
         <div class="text-4xl font-bold mb-2">D</div>
         <div class="text-sm font-semibold tracking-wider">NDCS Smart Wayfinding</div>
         <div class="mt-4 w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-        <div class="text-xs mt-4 opacity-90 text-center px-4 leading-relaxed">
-            Requesting camera access...<br>
-            <span class="text-[0.65rem] text-sky-200">Please allow camera permissions for AR Navigation</span>
-        </div>
+        <div class="text-xs mt-2 opacity-80">Waking up camera...</div>
     </div>
 
-    <!-- 全局悬浮 UI -->
     <div class="global-header">
         <div class="flex flex-col gap-2">
             <span class="bg-black/40 backdrop-blur text-white px-2.5 py-1 rounded-md text-[0.65rem] border border-white/20">
@@ -277,7 +276,7 @@
             </span>
             <span id="ai-status-container" class="bg-black/40 backdrop-blur text-white px-2.5 py-1 rounded-md text-[0.65rem] border border-white/20 flex items-center gap-1.5 w-fit transition-all duration-300">
                 <span id="ai-status-dot" class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-                <span id="ai-status-text">Requesting access...</span>
+                <span id="ai-status-text">System starting...</span>
             </span>
         </div>
         <div class="flex flex-col gap-2 items-end">
@@ -290,7 +289,6 @@
         </div>
     </div>
 
-    <!-- 导航模式切换控件 -->
     <div class="view-toggle-control">
         <button id="tab-ar" onclick="switchView('ar')" class="toggle-btn active">📸 AR Live</button>
         <button id="tab-map" onclick="switchView('map')" class="toggle-btn">🗺️ 2D Map</button>
@@ -300,31 +298,27 @@
     <div id="view-ar" class="view-layer">
         <div id="webcam-container"></div>
         
-        <!-- 动态高科技识别框 -->
         <div id="ar-scanner" class="ar-scanner-box">
             <div class="corner corner-tl"></div>
             <div class="corner corner-tr"></div>
             <div class="corner corner-bl"></div>
             <div class="corner corner-br"></div>
         </div>
-        <!-- 呼吸光圈配合使用 -->
         <div id="ar-halo" class="ar-halo"></div>
         
-        <!-- 常驻 3D 箭头 -->
         <div id="ar-arrow-container" class="ar-arrow-container" style="display: none;">
             <svg id="ar-arrow" class="ar-arrow arrow-up-blue" viewBox="0 0 100 100">
                 <polygon points="20,40 60,40 60,20 100,50 60,80 60,60 20,60" />
             </svg>
         </div>
 
-        <!-- 底部浮动交互面板 -->
         <div class="mt-auto bg-white/95 backdrop-blur-md rounded-t-3xl p-5 shadow-[0_-10px_40px_rgba(0,0,0,0.15)] z-20 pointer-events-auto transition-all duration-300">
             <div class="flex items-start gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-100 shadow-inner m-0">
                 <span class="text-2xl mt-1">🤖</span>
                 <div>
                     <h4 class="text-[0.65rem] text-[#0284c7] font-bold mb-1 uppercase tracking-wider">Live Voice Guide</h4>
                     <p id="ar-voice-text" class="text-[0.8rem] text-slate-700 font-bold leading-snug transition-opacity duration-300">
-                        "Waiting for camera authorization. Please allow permissions to begin..."
+                        "System is getting ready, please wait..."
                     </p>
                 </div>
             </div>
@@ -346,6 +340,7 @@
                 <path d="M 195 460 L 195 300 Q 195 270 225 270 L 270 270 Q 300 270 300 240 L 300 120" fill="none" stroke="#0284c7" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" class="marching-ants"/>
             </svg>
 
+            <!-- 建筑区块节点 -->
             <div class="absolute top-[440px] left-[125px] w-[140px] h-[60px] bg-white border-2 border-slate-300 rounded-2xl shadow-sm flex items-center justify-center z-20">
                 <span class="text-xl mr-2">🛗</span>
                 <span class="text-[0.75rem] font-bold text-slate-600">L4 Lift Lobby</span>
@@ -363,6 +358,7 @@
                 <span class="text-[0.55rem] font-bold text-emerald-600 mt-1 bg-emerald-100 px-2 py-0.5 rounded-md">📍 Destination</span>
             </div>
 
+            <!-- 实时位置雷达标记 -->
             <div class="absolute top-[360px] left-[195px] transform -translate-x-1/2 -translate-y-1/2 z-30 transition-all duration-1000 ease-in-out flex items-center justify-center w-[40px] h-[40px]" id="radar-marker">
                 <div class="radar-ping"></div>
                 <div class="w-5 h-5 bg-white rounded-full shadow-md flex items-center justify-center border-2 border-[#0284c7] relative z-10">
@@ -466,7 +462,8 @@
 
     async function initCameraAndAI() {
         try {
-            webcam = new tmImage.Webcam(390, 780, true);
+            // 参数修改：false 代表关闭自动镜像翻转，facingMode 强制调用后置摄像头
+            webcam = new tmImage.Webcam(390, 780, false);
             await webcam.setup({ facingMode: "environment" });
             await webcam.play();
             
